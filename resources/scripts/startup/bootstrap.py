@@ -21,6 +21,7 @@ import sys
 import time
 import traceback
 
+
 __author__ = "Diego Garcia Huerta"
 __contact__ = "https://www.linkedin.com/in/diegogh/"
 
@@ -31,7 +32,6 @@ ENGINE_NICE_NAME = "Shotgun Blender Engine"
 SGTK_MODULE_PATH = os.environ.get("SGTK_MODULE_PATH")
 if SGTK_MODULE_PATH and SGTK_MODULE_PATH not in sys.path:
     sys.path.insert(0, SGTK_MODULE_PATH)
-
 
 import sgtk
 

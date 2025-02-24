@@ -10,7 +10,6 @@
 # The full license is in the file LICENSE, distributed with this software.
 # ----------------------------------------------------------------------------
 
-
 import os
 import sys
 import imp
@@ -50,7 +49,6 @@ bl_info = {
     "category": "User Interface",
 }
 
-
 PYSIDE2_MISSING_MESSAGE = (
     "\n"
     + "-" * 80
@@ -60,12 +58,37 @@ PYSIDE2_MISSING_MESSAGE = (
     + "-" * 80
 )
 
+site_packages_path = None
+# Load the shared site-packages.path file to find the location to load
+# PySide6 from. We need to make sure to load the same module as is used by
+# Shotgun.
+path_file = os.path.join(
+    os.path.abspath(os.path.join(os.path.dirname(__file__), "../../..")),
+    "site-packages.path"
+)
+
+try:
+    with open(path_file, "r") as file:
+        site_packages_path = file.read().strip()
+except FileNotFoundError:
+    print(f"Error: {path_file} not found!")
+
+if site_packages_path:
+    sys.path.insert(0, site_packages_path)
+
+# Now that the correct site-packages path has been added to the system path
+# we should be able to load the version of PySide installed by ShotGun app.
 try:
     from PySide2 import QtWidgets, QtCore
 
     PYSIDE2_IMPORTED = True
 except ModuleNotFoundError:
-    PYSIDE2_IMPORTED = False
+    try:
+        from PySide6 import QtWidgets, QtCore
+
+        PYSIDE2_IMPORTED = True
+    except ModuleNotFoundError:
+        PYSIDE2_IMPORTED = False
 
 
 class ShotgunConsoleLog(bpy.types.Operator):
@@ -83,7 +106,6 @@ class ShotgunConsoleLog(bpy.types.Operator):
     def execute(self, context):
         self.report({self.level}, self.message)
         return {"FINISHED"}
-
 
 # based on
 # https://github.com/vincentgires/blender-scripts/blob/master/scripts/addons/qtutils/core.py
@@ -211,37 +233,6 @@ def insert_main_menu(menu_class, before_menu_class):
 
     # the newly create class is now within the local variables
     return locals()["TOPBAR_MT_editor_menus"]
-
-
-# class TOPBAR_MT_editor_menus(Menu):
-#     """
-#     I could not find an easy way to simply add the menu into Blender's top
-#     menubar.
-
-#     So we use a bit of a hack, by recreating the the same as what blender does
-#     to create it's own top level menus but adding the `Shotgun` menu right
-#     before `help` menu.
-
-#     Note that If the script to generate those menus was to change in Blender,
-#     this would have to be update to reflect the same changes!
-#     """
-#     bl_idname = "TOPBAR_MT_editor_menus"
-#     bl_label = ""
-
-#     def draw(self, _context):
-#         layout = self.layout
-
-#         layout.menu("TOPBAR_MT_app", text="", icon='BLENDER')
-
-#         layout.menu("TOPBAR_MT_file")
-#         layout.menu("TOPBAR_MT_edit")
-
-#         layout.menu("TOPBAR_MT_render")
-
-#         layout.menu("TOPBAR_MT_window")
-#         layout.menu("TOPBAR_MT_shotgun")
-#         layout.menu("TOPBAR_MT_help")
-
 
 def boostrap():
     # start the engine

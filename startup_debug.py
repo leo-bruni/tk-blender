@@ -12,9 +12,15 @@
 
 import os
 import sys
+import tempfile
+import subprocess
 
 import sgtk
 from sgtk.platform import SoftwareLauncher, SoftwareVersion, LaunchInformation
+
+################################################################################
+# RUN STARTUP WITH macOS TERMINAL LOGGING                                      #
+################################################################################
 
 __author__ = "Diego Garcia Huerta"
 __contact__ = "https://www.linkedin.com/in/diegogh/"
@@ -80,9 +86,6 @@ class BlenderLauncher(SoftwareLauncher):
 
     @property
     def minimum_supported_version(self):
-        """
-        The minimum software version that is supported by the launcher.
-        """
         return "2.8"
 
     def prepare_launch(self, exec_path, args, file_to_open=None):
@@ -98,8 +101,7 @@ class BlenderLauncher(SoftwareLauncher):
         """
         required_env = {}
 
-        # Run the engine's startup file file when Blender starts up
-        # by appending it to the env PYTHONPATH.
+        # Example: standard environment-building from your existing code
         scripts_path = os.path.join(self.disk_location, "resources", "scripts")
         startup_path = os.path.join(scripts_path, "startup", "Shotgun_menu.py")
         args += "-P " + startup_path
@@ -110,33 +112,52 @@ class BlenderLauncher(SoftwareLauncher):
             pyside2_python_path = os.path.join(self.disk_location, "python", "ext")
             required_env["PYSIDE2_PYTHONPATH"] = pyside2_python_path
 
-        # Prepare the launch environment with variables required by the
-        # classic bootstrap approach.
-        self.logger.debug(
-            "Preparing Blender Launch via Toolkit Classic methodology ..."
-        )
-
-        required_env["SGTK_MODULE_PATH"] = sgtk.get_sgtk_module_path().replace(
-            "\\", "/"
-        )
-
-        engine_startup_path = os.path.join(
-            self.disk_location, "startup", "bootstrap.py"
-        )
+        required_env["SGTK_MODULE_PATH"] = sgtk.get_sgtk_module_path().replace("\\", "/")
+        engine_startup_path = os.path.join(self.disk_location, "startup", "bootstrap.py")
         required_env["SGTK_BLENDER_ENGINE_STARTUP"] = engine_startup_path
         required_env["SGTK_BLENDER_ENGINE_PYTHON"] = sys.executable.replace("\\", "/")
-
         required_env["SGTK_ENGINE"] = self.engine_name
         required_env["SGTK_CONTEXT"] = sgtk.context.serialize(self.context)
 
         if file_to_open:
-            # Add the file name to open to the launch environment
             required_env["SGTK_FILE_TO_OPEN"] = file_to_open
 
-        return LaunchInformation(exec_path, args, required_env)
+        # Build a small shell script that sets env vars, then calls Blender. This
+        # is the bit which forces logging from Blender to appear in macOS terminal
+        shell_script_lines = [
+            "#!/bin/bash\n",
+            "# Auto-generated script to launch Blender in a Terminal\n",
+        ]
+        # Export each environment variable
+        for key, val in required_env.items():
+            val_escaped = val.replace('"', '\\"')
+            shell_script_lines.append(f'export {key}="{val_escaped}"\n')
+        shell_script_lines.append(f'"{exec_path}" {args}\n')
+        shell_script_lines.append('read -p "Press [Enter] to close this window..."\n')
 
-    ###########################################################################
-    # private methods
+        # Write this script to a temp file
+        tmp_file = tempfile.NamedTemporaryFile(delete=False, mode="w", prefix="blender_launch_", suffix=".sh")
+        script_path = tmp_file.name
+        tmp_file.writelines(shell_script_lines)
+        tmp_file.close()
+
+        # Make it executable
+        os.chmod(script_path, 0o755)
+
+        # Use AppleScript to open a new Terminal window that runs our script
+        apple_script = f'''
+            tell application "Terminal"
+                activate
+                do script "{script_path}"
+            end tell
+        '''
+        # Launch the AppleScript (async).
+        subprocess.Popen(["osascript", "-e", apple_script])
+
+        # Return a "dummy" LaunchInformation
+        return LaunchInformation(
+            None, None, None
+        )
 
     def _icon_from_engine(self):
         """
