@@ -275,23 +275,40 @@ class BlenderSessionGeometryPublishPlugin(HookBaseClass):
         start_frame, end_frame = _find_scene_animation_range()
 
         try:
-            context = get_view3d_operator_context()
+            context_override = get_view3d_operator_context()
+            if not context_override:
+                raise Exception("Could not find a 3D View context to execute Alembic export.")
 
-            bpy.ops.wm.alembic_export(
-                context,
-                filepath=publish_path,
-                selected=False,
-                visible_objects_only=True,
-                uvs=True,
-                face_sets=True,
-                start=start_frame,
-                end=end_frame,
-            )
+            if bpy.app.version < (4, 0, 0):
+                # for Blender 3.6 and earlier
+                bpy.ops.wm.alembic_export(
+                    context_override,
+                    filepath=publish_path,
+                    selected=False,
+                    visible_objects_only=True,
+                    uvs=True,
+                    face_sets=True,
+                    start=start_frame,
+                    end=end_frame,
+                )
+            else:
+                # for Blender 4.0 and later
+                with bpy.context.temp_override(**context_override):
+                    bpy.ops.wm.alembic_export(
+                        filepath=publish_path,
+                        selected=False,
+                        visible_objects_only=True,
+                        uvs=True,
+                        face_sets=True,
+                        start=start_frame,
+                        end=end_frame,
+                    )
 
         except Exception as e:
             error_msg = "Failed to export Geometry: %s" % e
             self.logger.error(error_msg)
             raise Exception(error_msg)
+
 
         # Now that the path has been generated, hand it off to the
         super(BlenderSessionGeometryPublishPlugin, self).publish(settings, item)
